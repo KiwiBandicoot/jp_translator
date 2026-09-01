@@ -1,9 +1,12 @@
 ```yaml
 Name: jp_translator
+Descriptioon: An offline English to Japanese word for word translator.
+Current Features: One word in one word out :)
+Future features: More than one word ideally!
 Example: See Below
   [
-  English Input:  Hello my friend
-  Japanese Text:  やあ　古くからの友人よ
-  Romaji Guide:   yaa   furuku karano yuujin yo
+  English Input:  Food,
+  Japanese Text:  食品,
+  Romaji Guide:   shokuhin
   ]
 ```
