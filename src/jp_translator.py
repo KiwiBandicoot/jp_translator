@@ -1,41 +1,58 @@
-import sys
 import argparse
-import urllib.parse
-import requests
+import sys
+import ctranslate2
 import pykakasi
+import transformers
+
 
 def main():
-    parser = argparse.ArgumentParser(description="English to Japanese Romaji CLI")
-    parser.add_argument("text", nargs="+", help="English text to translate")
-    args = parser.parse_args()
+  parser = argparse.ArgumentParser(
+      description="Offline English to Japanese Romaji CLI"
+  )
+  parser.add_argument("text", nargs="+", help="English text to translate")
+  args = parser.parse_args()
 
-    english_text = " ".join(args.text)
-    encoded_text = urllib.parse.quote(english_text)
-    url = f"https://api.mymemory.translated.net/get?q={encoded_text}&langpair=en|ja"
+  english_text = " ".join(args.text).strip()
+  if not english_text:
+    print("Error: Please provide English text to translate.")
+    sys.exit(1)
 
-    headers = {"User-Agent": "Mozilla/5.0"}
-    
-    try:
-        response = requests.get(url, headers=headers, timeout=10)
-        data = response.json()
-        japanese_text = data.get("responseData", {}).get("translatedText", "")
-    except Exception as e:
-        print(f"Error fetching translation: {e}")
-        sys.exit(1)
+  # 1. Load local tokenizer and ctranslate2 neural model
+  model_dir = "opus-mt-en-jap-ct2"
+  try:
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
+        "Helsinki-NLP/opus-mt-en-jap"
+    )
+    translator = ctranslate2.Translator(model_dir, device="cpu")
+  except Exception as e:
+    print(f"Error loading local model: {e}")
+    print(
+        "Ensure you ran: ct2-transformers-converter --model"
+        " Helsinki-NLP/opus-mt-en-jap --output_dir opus-mt-en-jap-ct2"
+    )
+    sys.exit(1)
 
-    kks = pykakasi.kakasi()
-    result = kks.convert(japanese_text)
+  # 2. Local Neural Translation (CPU-bound, no network requests)
+  source_tokens = tokenizer.convert_ids_to_tokens(tokenizer.encode(english_text))
+  results = translator.translate_batch([source_tokens])
+  target_tokens = results[0].hypotheses[0]
+  japanese_text = tokenizer.decode(
+      tokenizer.convert_tokens_to_ids(target_tokens)
+  )
 
-    # Extract hepburn transliteration
-    romaji_list = [item["hepburn"] for item in result if item["hepburn"]]
-    romaji_text = " ".join(romaji_list)
+  # 3. Local Kanji/Kana to Romaji conversion
+  kks = pykakasi.kakasi()
+  result = kks.convert(japanese_text)
 
-    println_output(english_text, japanese_text, romaji_text)
+  romaji_tokens = [
+      item.get("hepburn") or item.get("orig", "") for item in result
+  ]
+  romaji_text = " ".join(romaji_tokens).strip()
 
-def println_output(english, japanese, romaji):
-    print(f"\nEnglish Input:  {english}")
-    print(f"Japanese Text:  {japanese}")
-    print(f"Romaji Guide:   {romaji}\n")
+  print(f"\nEnglish Input:  {english_text}")
+  print(f"Japanese Text:  {japanese_text}")
+  print(f"Romaji Guide:   {romaji_text}\n")
+
 
 if __name__ == "__main__":
-    main()
+  main()
